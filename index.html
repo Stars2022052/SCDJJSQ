@@ -1,0 +1,3169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="description" content="潮汐秘境计算器 —— 反向扫雷玩法的精确概率推导与下一步推荐工具">
+<title>潮汐秘境计算器</title>
+
+<!-- ==== CONFIG:BEGIN ==== -->
+<script id="tidal-config" type="application/json">
+{
+  "meta": {
+    "version": "1.0.0"
+  },
+  "text": {
+    "title": "SexClub独家 潮汐秘境计算器",
+    "subtitle": "Stars",
+    "btnShot": "截图识图(待开发)",
+    "btnHelp": "帮助",
+    "btnSettings": "设置",
+    "paletteLabel": "标记",
+    "toolMenu": "菜单",
+    "toolDiamond": "钻石",
+    "toolSafe": "安全",
+    "toolClear": "清除",
+    "statRemaining": "剩余钻石",
+    "statFound": "已找到",
+    "statPending": "待定",
+    "recTitle": "下一步推荐",
+    "recDone": "全部钻石已找到，这一局完成了",
+    "recStart": "先点开任意一格，把看到的结果填进来",
+    "recFmt": "建议点开 第 {row} 行 · 第 {col} 列",
+    "recProb": "钻石概率 {p}%",
+    "recTie": "并列最高，选了信息量更大的那一格",
+    "btnUndo": "撤销",
+    "btnDeduce": "自动推导",
+    "btnClear": "清空棋盘",
+    "badgeExact": "精确",
+    "badgeApprox": "近似",
+    "badgeIdle": "待输入",
+    "legendLow": "低概率",
+    "legendMid": "中概率",
+    "legendHigh": "高概率",
+    "legendDia": "钻石",
+    "legendSafe": "安全"
+  },
+  "board": {
+    "sizes": [
+      8,
+      10,
+      12
+    ],
+    "diamonds": [
+      20,
+      30,
+      45
+    ],
+    "defaultSize": 10,
+    "cellSize": 38,
+    "gap": 4,
+    "radius": 9
+  },
+  "prob": {
+    "lowMax": 20,
+    "midMax": 50,
+    "useGlobal": true,
+    "timeMs": 400
+  },
+  "color": {
+    "bg": "#eef1f7",
+    "bg2": "#e5eaf4",
+    "panel": "#ffffff",
+    "ink": "#171a22",
+    "muted": "#6a7285",
+    "line": "#e4e8f0",
+    "accent": "#3b6ef6",
+    "accentInk": "#ffffff",
+    "low": "#2f6df6",
+    "mid": "#b0731a",
+    "high": "#e0382e",
+    "num1": "#2f6df6",
+    "num2": "#1a9d5a",
+    "num3": "#e2700e",
+    "num4": "#8b5cf6",
+    "num5": "#d92d20",
+    "num6": "#0d9488",
+    "num7": "#334155",
+    "num8": "#a16207",
+    "diaBg": "#fff3bf",
+    "diaLine": "#f0a500",
+    "safeBg": "#eaeef4",
+    "safeInk": "#98a2b3",
+    "rec": "#ff2d2d"
+  },
+  "fx": {
+    "tint": 0.06,
+    "pulse": true,
+    "pulseMs": 1500,
+    "showCoords": true
+  }
+}
+</script>
+<!-- ==== CONFIG:END ==== -->
+
+<style>
+/* =========================================================================
+ * 潮汐秘境计算器 · 样式
+ * 所有可定制项都通过 CSS 变量暴露，JS 会依据内嵌 CONFIG 覆盖 :root 上的值。
+ * ========================================================================= */
+
+:root {
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", "Noto Sans SC", "Hiragino Sans GB", sans-serif;
+
+  --bg: #eef1f7;
+  --bg2: #e5eaf4;
+  --panel: #ffffff;
+  --ink: #171a22;
+  --muted: #6a7285;
+  --line: #e4e8f0;
+  --accent: #3b6ef6;
+  --accent-ink: #ffffff;
+
+  --low: #2f6df6;
+  --mid: #b0731a;
+  --high: #e0382e;
+
+  --num1: #2f6df6;
+  --num2: #1a9d5a;
+  --num3: #e2700e;
+  --num4: #8b5cf6;
+  --num5: #d92d20;
+  --num6: #0d9488;
+  --num7: #334155;
+  --num8: #a16207;
+
+  --dia-bg: #fff3bf;
+  --dia-line: #f0a500;
+  --safe-bg: #eaeef4;
+  --safe-ink: #98a2b3;
+  --rec: #ff2d2d;
+
+  --cell: 38px;
+  --gap: 4px;
+  --radius: 9px;
+  --tint: 0.06;
+  --pulse-ms: 1500ms;
+  --cols: 10;
+  --rows: 10;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font);
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 600px at 50% -10%, #ffffff 0%, transparent 55%),
+    linear-gradient(160deg, var(--bg), var(--bg2));
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+  padding: 26px 16px 40px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 760px;
+  margin: 0 auto;
+}
+
+/* ------------------------------------------------------------- 顶部区域 */
+
+.topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.brand p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+}
+
+.topnav {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------- 按钮 */
+
+.btn {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background .14s, border-color .14s, transform .1s, box-shadow .14s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(20, 30, 60, .04);
+}
+
+.btn:hover {
+  background: #f7f9fd;
+  border-color: #cfd7e6;
+}
+
+.btn:active { transform: translateY(1px); }
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.btn.primary:hover { filter: brightness(1.06); }
+
+.btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.btn.ghost:hover { background: rgba(255,255,255,.7); border-color: var(--line); color: var(--ink); }
+
+.btn:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* -------------------------------------------------------------- 控制条 */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.segmented {
+  display: inline-flex;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  padding: 3px;
+  gap: 2px;
+  box-shadow: 0 1px 2px rgba(20, 30, 60, .04);
+}
+
+.segmented button {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background .14s, color .14s;
+}
+
+.segmented button:hover { color: var(--ink); background: #f2f5fa; }
+
+.segmented button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.counters {
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+}
+
+.counter { display: flex; align-items: baseline; gap: 6px; }
+.counter span { font-size: 11.5px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
+.counter b { font-size: 16px; font-variant-numeric: tabular-nums; font-weight: 750; letter-spacing: -0.01em; }
+.counter b.dia { color: var(--dia-line); }
+.counter b.pos { color: var(--accent); }
+
+/* -------------------------------------------------------------- 调色板 */
+
+.palette {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  margin-bottom: 14px;
+  align-items: center;
+}
+
+.palette .plabel {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--muted);
+  margin-right: 4px;
+  letter-spacing: .02em;
+}
+
+.tool {
+  min-width: 34px;
+  height: 32px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all .12s;
+  box-shadow: 0 1px 2px rgba(20, 30, 60, .04);
+}
+
+.tool:hover { background: #f7f9fd; border-color: #cfd7e6; transform: translateY(-1px); }
+
+.tool.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px -4px rgba(20, 30, 60, .5);
+}
+
+.tool.t-dia.on { background: var(--dia-line); border-color: var(--dia-line); color: #3a2600; }
+.tool.t-safe.on { background: var(--safe-ink); border-color: var(--safe-ink); color: #fff; }
+
+/* ---------------------------------------------------------------- 棋盘 */
+
+.boardCard {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: 0 10px 30px -18px rgba(25, 40, 80, .35), 0 2px 6px -2px rgba(25, 40, 80, .08);
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+  width: fit-content;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+.boardFrame {
+  display: grid;
+  grid-template-columns: 22px auto 22px;
+  grid-template-rows: 18px auto;
+  gap: 5px;
+  align-items: center;
+  justify-items: center;
+  justify-content: center;
+}
+
+.boardFrame.noCoords { display: block; }
+.boardFrame.noCoords .colHead,
+.boardFrame.noCoords .rowHead,
+.boardFrame.noCoords .corner { display: none; }
+
+.corner { width: 22px; height: 18px; }
+
+.colHead {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--cell));
+  gap: var(--gap);
+  justify-content: center;
+}
+
+.rowHead {
+  display: grid;
+  grid-template-rows: repeat(var(--rows), var(--cell));
+  gap: var(--gap);
+}
+
+.colHead i, .rowHead i {
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 650;
+  color: #aab2c2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), var(--cell));
+  gap: var(--gap);
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.cell {
+  position: relative;
+  width: var(--cell);
+  height: var(--cell);
+  padding: 0;
+  border-radius: var(--radius);
+  border: 1.5px dashed #cfd7e6;
+  background: var(--panel);
+  color: var(--muted);
+  font: 750 10.5px/1 var(--font);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform .11s cubic-bezier(.3,1.4,.5,1), box-shadow .14s, border-color .14s, background .14s;
+  overflow: visible;
+}
+
+.cell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s;
+}
+
+.cell:hover { transform: translateY(-1.5px); box-shadow: 0 4px 10px -4px rgba(25,40,80,.35); }
+.cell:active { transform: translateY(0); }
+
+.cell:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 未翻开：白底 + 虚线边框 + 概率数字 */
+.cell.unknown { background: var(--panel); }
+.cell.unknown::before { opacity: calc(var(--tint) * var(--w, 1)); }
+.cell.p-low { border-color: var(--low); color: var(--low); }
+.cell.p-mid { border-color: var(--mid); color: var(--mid); }
+.cell.p-high { border-color: var(--high); color: var(--high); }
+
+.cell.p-low::before { background: var(--low); }
+.cell.p-mid::before { background: var(--mid); }
+.cell.p-high::before { background: var(--high); }
+
+/* 已完成（无未知）时的百分号弱化 */
+.cell .val { position: relative; z-index: 1; }
+.cell .val small { font-size: 7.5px; font-weight: 700; opacity: .65; margin-left: .5px; }
+
+/* 三位数百分比（100%）缩一号，避免顶到边框 */
+.cell.unknown.pct3 { font-size: 9px; letter-spacing: -0.04em; }
+
+/* 已翻开的数字格 */
+.cell.num {
+  border-style: solid;
+  border-color: var(--line);
+  background: #fcfdff;
+  font-size: 16px;
+  letter-spacing: 0;
+}
+.cell.num.n0 { color: #c3cad8; }
+.cell.num.n1 { color: var(--num1); }
+.cell.num.n2 { color: var(--num2); }
+.cell.num.n3 { color: var(--num3); }
+.cell.num.n4 { color: var(--num4); }
+.cell.num.n5 { color: var(--num5); }
+.cell.num.n6 { color: var(--num6); }
+.cell.num.n7 { color: var(--num7); }
+.cell.num.n8 { color: var(--num8); }
+
+/* 钻石 */
+.cell.dia {
+  background: var(--dia-bg);
+  border: 1.5px solid var(--dia-line);
+  font-size: 17px;
+  line-height: 1;
+  color: #4a3200;
+}
+.cell.dia.derived { border-style: dashed; }
+
+/* 安全格 */
+.cell.safe {
+  background: var(--safe-bg);
+  border: 1.5px solid transparent;
+  color: var(--safe-ink);
+  font-size: 15px;
+}
+.cell.safe.derived { border: 1.5px dashed #c9d2e0; }
+
+/* 键盘光标 */
+.cell.cursor {
+  box-shadow: 0 0 0 2.5px var(--accent), 0 4px 12px -4px rgba(25,40,80,.4);
+  z-index: 3;
+}
+
+/* 推荐格：红色粗实线 + 呼吸动画 */
+.cell.rec {
+  border: 2.5px solid var(--rec) !important;
+  border-style: solid !important;
+  z-index: 2;
+}
+
+.cell.rec::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: calc(var(--radius) + 3px);
+  border: 2px solid var(--rec);
+  pointer-events: none;
+  animation: tidal-breathe var(--pulse-ms) ease-in-out infinite;
+}
+
+@keyframes tidal-breathe {
+  0%, 100% { transform: scale(0.94); opacity: .30; }
+  50%      { transform: scale(1.10); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cell.rec::after { animation: none; opacity: .85; }
+  .cell { transition: none; }
+}
+
+/* 关闭呼吸动画（可在设置 / 定制器中切换） */
+.nopulse .cell.rec::after { animation: none; opacity: .9; }
+.nopulse .recCard .recDot { animation: none; }
+
+/* ---------------------------------------------------------- 底部信息区 */
+
+.bottom {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.recCard {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 13px 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 2px 8px -6px rgba(25,40,80,.3);
+  min-height: 58px;
+}
+
+.recCard .recDot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--rec);
+  flex: none;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--rec) 18%, transparent);
+  animation: tidal-breathe var(--pulse-ms) ease-in-out infinite;
+}
+
+.recCard.done .recDot { background: var(--dia-line); animation: none; }
+.recCard.warn .recDot { background: var(--high); animation: none; }
+
+.recCard .recMain { flex: 1; min-width: 0; }
+.recCard .recTitle { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.recCard .recText { font-size: 15px; font-weight: 700; margin-top: 1px; letter-spacing: -0.01em; }
+.recCard .recText .hl { color: var(--rec); }
+.recCard .recText .pct {
+  font-variant-numeric: tabular-nums;
+  color: var(--rec);
+  margin-left: 6px;
+}
+.recCard .recNote { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+
+.recCard .recToggle {
+  font-size: 12px; font-weight: 650;
+  color: var(--muted);
+  background: #f4f7fc;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 6px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.recCard .recToggle:hover { color: var(--ink); background: #eef3fb; }
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.actions .spacer { flex: 1; }
+
+.badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  letter-spacing: .04em;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.badge.exact { background: #e8f6ee; color: #17754a; border-color: #c6e8d6; }
+.badge.approx { background: #fff4e0; color: #9a5b06; border-color: #f6dfb8; }
+.badge.err { background: #fdecec; color: #b3261e; border-color: #f7cccc; }
+.badge.idle { background: #f1f4f9; color: var(--muted); border-color: var(--line); }
+
+.legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 2px 4px 0;
+}
+
+.legend i {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-style: normal;
+}
+
+.legend .sw {
+  width: 13px; height: 13px; border-radius: 4px;
+  display: inline-block;
+  border: 1.5px dashed currentColor;
+}
+.legend .sw.blue { color: var(--low); }
+.legend .sw.brown { color: var(--mid); }
+.legend .sw.red { color: var(--high); }
+.legend .sw.dia { background: var(--dia-bg); border: 1.5px solid var(--dia-line); }
+.legend .sw.safe { background: var(--safe-bg); border: 1.5px solid transparent; }
+
+.legend .tally {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.legend .tally b { color: var(--ink); font-weight: 700; }
+.legend .tally b.d { color: var(--dia-line); }
+
+/* ---------------------------------------------------------------- 弹窗 */
+
+.modalMask {
+  position: fixed;
+  inset: 0;
+  background: rgba(18, 24, 40, .42);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 60;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s;
+}
+
+.modalMask.on { opacity: 1; pointer-events: auto; }
+
+.modal {
+  background: var(--panel);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 560px;
+  max-height: 86vh;
+  overflow: auto;
+  box-shadow: 0 30px 70px -24px rgba(12, 20, 40, .5);
+  transform: translateY(10px) scale(.985);
+  transition: transform .2s cubic-bezier(.2,.9,.3,1);
+  border: 1px solid var(--line);
+}
+
+.modalMask.on .modal { transform: none; }
+
+.modal.wide { max-width: 860px; }
+
+.modalHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 17px 20px 12px;
+  gap: 12px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  z-index: 2;
+  border-radius: 18px 18px 0 0;
+}
+
+.modalHead h2 { margin: 0; font-size: 16px; font-weight: 750; letter-spacing: -0.01em; }
+
+.modalClose {
+  border: 0;
+  background: #f2f5fa;
+  width: 28px; height: 28px;
+  border-radius: 9px;
+  cursor: pointer;
+  font-size: 15px;
+  color: var(--muted);
+  display: flex; align-items: center; justify-content: center;
+  flex: none;
+}
+.modalClose:hover { background: #e8edf6; color: var(--ink); }
+
+.modalBody { padding: 16px 20px 20px; }
+
+.modalBody h3 {
+  font-size: 12px;
+  font-weight: 750;
+  color: var(--muted);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  margin: 18px 0 8px;
+}
+.modalBody h3:first-child { margin-top: 0; }
+
+.modalBody p, .modalBody li { font-size: 13px; line-height: 1.65; color: #2b3243; }
+.modalBody p { margin: 6px 0; }
+.modalBody ul { margin: 6px 0; padding-left: 20px; }
+.modalBody code {
+  background: #f1f4f9;
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+.modalBody kbd {
+  display: inline-block;
+  min-width: 18px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid #ccd4e2;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-family: ui-monospace, Consolas, monospace;
+  color: #3a4256;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 0;
+  border-bottom: 1px solid #f0f3f9;
+}
+.row:last-child { border-bottom: 0; }
+.row .rlabel { font-size: 13px; font-weight: 600; }
+.row .rdesc { font-size: 11.5px; color: var(--muted); margin-top: 1px; font-weight: 400; }
+.row .rctl { flex: none; display: flex; align-items: center; gap: 8px; }
+
+.switch {
+  position: relative;
+  width: 40px; height: 23px;
+  border-radius: 999px;
+  background: #d8dfea;
+  border: 0;
+  cursor: pointer;
+  transition: background .16s;
+  flex: none;
+  padding: 0;
+}
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2.5px; left: 2.5px;
+  width: 18px; height: 18px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform .18s cubic-bezier(.3,1.3,.5,1);
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+}
+.switch.on { background: var(--accent); }
+.switch.on::after { transform: translateX(17px); }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 4px;
+  border-radius: 999px;
+  background: #dfe5ef;
+  outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px; height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translate(-50%, 12px);
+  background: #1d2333;
+  color: #fff;
+  padding: 10px 17px;
+  border-radius: 11px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 14px 32px -12px rgba(10,16,30,.6);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .18s, transform .22s cubic-bezier(.2,.9,.3,1);
+  z-index: 90;
+  max-width: min(92vw, 480px);
+  text-align: center;
+}
+.toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+/* --------------------------------------------------------- 截图识图面板 */
+
+.shotGrid {
+  display: grid;
+  grid-template-columns: 1fr 240px;
+  gap: 16px;
+}
+@media (max-width: 760px) {
+  .shotGrid { grid-template-columns: 1fr; }
+}
+
+.shotStage {
+  position: relative;
+  background:
+    repeating-conic-gradient(#f4f6fa 0% 25%, #ffffff 0% 50%) 50% / 18px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  min-height: 220px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 8px;
+}
+
+.shotStage img {
+  max-width: 100%;
+  max-height: 52vh;
+  display: block;
+  border-radius: 6px;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.shotWrap {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.shotOverlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  border: 2px solid var(--accent);
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 1fr);
+  cursor: crosshair;
+  line-height: normal;
+}
+
+.shotOverlay .sc {
+  border: 1px solid rgba(80, 130, 255, .5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.8);
+}
+.shotOverlay .sc.dia { background: rgba(240,165,0,.72); }
+.shotOverlay .sc.safe { background: rgba(70,90,120,.62); }
+.shotOverlay .sc.num { background: rgba(40,200,140,.6); }
+
+.shotDrop {
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+  padding: 30px 16px;
+  line-height: 1.7;
+}
+.shotDrop b { color: var(--ink); }
+
+.shotSide { display: grid; gap: 10px; align-content: start; }
+.shotSide .hint { font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+
+.slider {
+  display: grid;
+  grid-template-columns: 42px 1fr 38px;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+.slider input[type="range"] { width: 100%; }
+.slider b { font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); font-size: 11.5px; }
+
+.hidden { display: none !important; }
+
+@media (max-width: 640px) {
+  body { padding: 16px 10px 30px; }
+  .brand h1 { font-size: 18px; }
+  .counters { gap: 12px; }
+  .counter b { font-size: 14px; }
+  .boardCard { padding: 10px; border-radius: 14px; }
+}
+
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <h1 data-cfg="title">潮汐秘境计算器</h1>
+      <p data-cfg="subtitle">反向扫雷 · 精确概率推导</p>
+    </div>
+    <nav class="topnav">
+      <button class="btn" id="btnShot" type="button"><span data-cfg="btnShot">截图识图</span></button>
+      <button class="btn ghost" id="btnHelp" type="button"><span data-cfg="btnHelp">帮助</span></button>
+      <button class="btn ghost" id="btnSettings" type="button"><span data-cfg="btnSettings">设置</span></button>
+    </nav>
+  </header>
+
+  <div class="bar">
+    <div class="segmented" id="maps" role="group" aria-label="地图尺寸"></div>
+    <div class="counters">
+      <div class="counter"><span data-cfg="statRemaining">剩余钻石</span><b id="cRemain" class="dia">0</b></div>
+      <div class="counter"><span data-cfg="statFound">已找到</span><b id="cFound" class="pos">0</b></div>
+      <div class="counter"><span data-cfg="statPending">待定</span><b id="cPending">0</b></div>
+    </div>
+  </div>
+
+  <div class="palette" id="palette" role="toolbar" aria-label="标记工具"></div>
+
+  <div class="boardCard">
+    <div class="boardFrame" id="boardFrame">
+      <div class="corner"></div>
+      <div class="colHead" id="colHead"></div>
+      <div class="corner"></div>
+      <div class="rowHead" id="rowHead"></div>
+      <div class="board" id="board" role="grid" aria-label="棋盘"></div>
+      <div class="corner"></div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="recCard" id="recCard">
+      <div class="recDot"></div>
+      <div class="recMain">
+        <div class="recTitle" data-cfg="recTitle">下一步推荐</div>
+        <div class="recText" id="recText">—</div>
+        <div class="recNote" id="recNote"></div>
+      </div>
+      <span class="badge idle" id="modeBadge">—</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="btnUndo" type="button"><span data-cfg="btnUndo">撤销</span></button>
+      <button class="btn primary" id="btnDeduce" type="button"><span data-cfg="btnDeduce">自动推导</span></button>
+      <button class="btn" id="btnClear" type="button"><span data-cfg="btnClear">清空棋盘</span></button>
+      <span class="spacer"></span>
+      <span class="badge idle" id="statBadge">—</span>
+    </div>
+
+    <div class="legend">
+      <i><span class="sw blue"></span><span data-cfg="legendLow">低概率</span></i>
+      <i><span class="sw brown"></span><span data-cfg="legendMid">中概率</span></i>
+      <i><span class="sw red"></span><span data-cfg="legendHigh">高概率</span></i>
+      <i><span class="sw dia"></span><span data-cfg="legendDia">钻石</span></i>
+      <i><span class="sw safe"></span><span data-cfg="legendSafe">安全</span></i>
+      <span class="tally" id="tally"></span>
+    </div>
+  </div>
+</div>
+
+<!-- 格子快捷菜单 -->
+<div class="modalMask" id="cellMenuMask" style="background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none">
+  <div id="cellMenu" style="position:fixed;background:#fff;border:1px solid var(--line);border-radius:13px;padding:7px;display:flex;gap:5px;flex-wrap:wrap;max-width:250px;box-shadow:0 16px 40px -14px rgba(12,20,40,.45);"></div>
+</div>
+
+<!-- 帮助 -->
+<div class="modalMask" id="helpMask">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modalHead">
+      <h2 id="helpTitle">怎么用</h2>
+      <button class="modalClose" data-close="helpMask" type="button" aria-label="关闭">✕</button>
+    </div>
+    <div class="modalBody">
+      <h3>玩法回顾</h3>
+      <p>《弹壳特攻队》的潮汐秘境是"反向扫雷"：格子里的 💎 是目标，不是雷。点开一格，如果是钻石就显示 💎；如果不是，就显示它周围 8 格里一共有几颗钻石（0–8）。三张地图的钻石总数分别是 8×8 有 20 颗、10×10 有 30 颗、12×12 有 45 颗。</p>
+
+      <h3>三步上手</h3>
+      <ul>
+        <li>先在游戏里点开几格，把看到的结果填进来：选一个标记工具，然后点对应的格子。</li>
+        <li>点「自动推导」，能确定的格子会被自动标出来。</li>
+        <li>看底部的「下一步推荐」，照着点最划算的那一格。</li>
+      </ul>
+
+      <h3>鼠标</h3>
+      <ul>
+        <li>左键：套用当前标记工具（工具选「菜单」时弹出快捷菜单）</li>
+        <li>右键：快速标记 / 取消钻石</li>
+        <li>按住左键拖动：连续涂抹同一标记</li>
+      </ul>
+
+      <h3>键盘</h3>
+      <ul>
+        <li><kbd>方向键</kbd> 移动光标，<kbd>0</kbd>–<kbd>8</kbd> 填数字</li>
+        <li><kbd>Enter</kbd> 标钻石，<kbd>X</kbd> 标安全，<kbd>Delete</kbd> 清除</li>
+        <li><kbd>Ctrl</kbd>+<kbd>Z</kbd> 撤销，<kbd>R</kbd> 自动推导</li>
+      </ul>
+
+      <h3>概率是怎么算的</h3>
+      <p>不是"取平均"，也不是"按密度估"。工具会先把所有能确定推导的格子推出来，然后对剩下的未知格<strong>枚举全部合法布局</strong>，再按全局钻石总数加权，得到每一格是钻石的精确比例。</p>
+      <p>可选地开启「全局钻石总数约束」：因为棋盘上钻石总数是固定的，剩余钻石的分配方式会反过来影响每一格的概率。这是更严格的做法，默认开启。</p>
+
+      <h3>关于「近似」</h3>
+      <p>极少数情况下（未翻开的格子太多、约束又过于宽松），精确枚举的规模会爆炸。此时工具会在约 0.4 秒后自动切换到「最大熵近似」，并在结果旁标注 <span class="badge approx">近似</span>。近似模式下数值仍会满足所有数字约束，但不保证是精确解。</p>
+    </div>
+  </div>
+</div>
+
+<!-- 设置 -->
+<div class="modalMask" id="settingsMask">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modalHead">
+      <h2 id="settingsTitle">设置</h2>
+      <button class="modalClose" data-close="settingsMask" type="button" aria-label="关闭">✕</button>
+    </div>
+    <div class="modalBody" id="settingsBody"></div>
+  </div>
+</div>
+
+<!-- 截图识图 -->
+<div class="modalMask" id="shotMask">
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="shotTitle">
+    <div class="modalHead">
+      <h2 id="shotTitle">截图识图</h2>
+      <button class="modalClose" data-close="shotMask" type="button" aria-label="关闭">✕</button>
+    </div>
+    <div class="modalBody">
+      <div class="shotGrid">
+        <div>
+          <div class="shotStage" id="shotStage">
+            <div class="shotDrop" id="shotDrop">
+              <b>把游戏截图拖到这里</b><br>
+              或 <label for="shotFile" style="color:var(--accent);font-weight:700;cursor:pointer;text-decoration:underline">选择图片</label>
+              （也可以直接 <kbd>Ctrl</kbd>+<kbd>V</kbd> 粘贴）
+              <input type="file" id="shotFile" accept="image/*" class="hidden">
+            </div>
+            <div class="shotWrap hidden" id="shotWrap">
+              <img id="shotImg" alt="游戏截图">
+              <div class="shotOverlay hidden" id="shotOverlay"></div>
+            </div>
+          </div>
+        </div>
+        <div class="shotSide" id="shotSide">
+          <button class="btn" id="shotAuto" type="button" disabled>自动对齐网格</button>
+          <div class="slider"><span>左</span><input type="range" id="gx" min="0" max="100" value="10" disabled><b id="gxv">10</b></div>
+          <div class="slider"><span>上</span><input type="range" id="gy" min="0" max="100" value="10" disabled><b id="gyv">10</b></div>
+          <div class="slider"><span>宽</span><input type="range" id="gw" min="5" max="100" value="80" disabled><b id="gwv">80</b></div>
+          <div class="slider"><span>高</span><input type="range" id="gh" min="5" max="100" value="80" disabled><b id="ghv">80</b></div>
+          <div class="hint">拖动滑块把蓝色网格对到棋盘上。然后<strong>直接在网格里点击</strong>，用当前标记工具填格子（和主棋盘一样的快捷键）。</div>
+          <button class="btn primary" id="shotApply" type="button" disabled>应用到棋盘</button>
+          <button class="btn ghost" id="shotReset" type="button" disabled>清空本次录入</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* =========================================================================
+ * 潮汐秘境 · 核心推导引擎 v1.0  （纯函数、零依赖、可在 Node / 浏览器运行）
+ * -------------------------------------------------------------------------
+ * 状态编码：
+ *   -1  未翻开（未知）
+ *   0..8 已翻开的数字格（表示周围 8 格的钻石数）
+ *   9  钻石（游戏中翻出的 💎，或推导 / 手动标记为钻石）
+ *  10  安全格（玩家或推导标记的 ×，确定不是钻石）
+ *
+ * 概率模型（严格版）：
+ *   先做确定性约束传播，得到"边界格"(frontier) 与"外围格"(outside)。
+ *   对每个连通分量精确枚举全部合法赋值，得到该分量在"含 k 颗钻石"条件下
+ *   的解数 cnt[k] 以及每格边缘计数 marg[cell][k]；不同分量用卷积合并。
+ *   全局钻石总数是硬约束：若外围格 nOut 个、边界共占 K 颗，
+ *   则剩余 R-K 颗在外围的放法有 C(nOut, R-K) 种。
+ *   任意事件权重 = Σ_K (该事件下边界占 k 颗的解数) × C(nOut, R-K)。
+ *   这等价于"在所有满足约束的完整布局上均匀计数"，是数学上正确的概率。
+ * ========================================================================= */
+var TidalCore = (function () {
+  'use strict';
+
+  var U = -1, DIA = 9, SAFE = 10;
+  var MAXC = 8;                       // 单条约束最多 8 个格
+
+  /* ---------------------------------------------------------------- 邻接 */
+
+  var nbCache = Object.create(null);
+
+  function neighbors(rows, cols) {
+    var key = rows + 'x' + cols;
+    if (nbCache[key]) return nbCache[key];
+    var list = new Array(rows * cols);
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var a = [];
+        for (var dr = -1; dr <= 1; dr++) {
+          for (var dc = -1; dc <= 1; dc++) {
+            if (dr === 0 && dc === 0) continue;
+            var rr = r + dr, cc = c + dc;
+            if (rr >= 0 && rr < rows && cc >= 0 && cc < cols) a.push(rr * cols + cc);
+          }
+        }
+        list[r * cols + c] = a;
+      }
+    }
+    nbCache[key] = list;
+    return list;
+  }
+
+  /* ------------------------------------------------------------ 组合数学 */
+
+  var _binom = [[1]];
+
+  function binom(n, k) {
+    if (k < 0 || n < 0 || k > n) return 0;
+    if (k === 0 || k === n) return 1;
+    k = Math.min(k, n - k);
+    while (_binom.length <= n) {
+      var i = _binom.length, row = new Array(i + 1);
+      row[0] = 1; row[i] = 1;
+      for (var j = 1; j < i; j++) row[j] = _binom[i - 1][j - 1] + _binom[i - 1][j];
+      _binom.push(row);
+    }
+    return _binom[n][k];
+  }
+
+  function comboEstimate(u, k) {
+    if (k < 0 || k > u) return Infinity;
+    if (k === 0 || k === u) return 1;
+    k = Math.min(k, u - k);
+    var r = 1;
+    for (var i = 1; i <= k; i++) {
+      r = r * (u - k + i) / i;
+      if (r > 1e12) return 1e12;
+    }
+    return r;
+  }
+
+  /* -------------------------------------------------------------- 小工具 */
+
+  function cellName(idx, cols) {
+    return '第' + (Math.floor(idx / cols) + 1) + '行第' + (idx % cols + 1) + '列';
+  }
+
+  function sortNums(a) { return a.slice().sort(function (x, y) { return x - y; }); }
+
+  function isSubset(a, b) {
+    if (a.length > b.length) return false;
+    var A = sortNums(a), B = sortNums(b);
+    var i = 0, j = 0;
+    while (i < A.length && j < B.length) {
+      if (A[i] === B[j]) { i++; j++; }
+      else if (A[i] > B[j]) { j++; }
+      else return false;
+    }
+    return i === A.length;
+  }
+
+  function setDiff(b, a) {
+    var out = [];
+    for (var i = 0; i < b.length; i++) if (a.indexOf(b[i]) < 0) out.push(b[i]);
+    return out;
+  }
+
+  function sameSet(a, b) {
+    if (a.length !== b.length) return false;
+    var x = sortNums(a), y = sortNums(b);
+    for (var i = 0; i < x.length; i++) if (x[i] !== y[i]) return false;
+    return true;
+  }
+
+  function sumArr(a) {
+    var s = 0;
+    for (var i = 0; i < a.length; i++) s += a[i];
+    return s;
+  }
+
+  function normArr(a) {
+    var s = sumArr(a), out = new Float64Array(a.length);
+    if (s > 0) for (var i = 0; i < a.length; i++) out[i] = a[i] / s;
+    return out;
+  }
+
+  function conv(a, b) {
+    var out = new Float64Array(a.length + b.length - 1);
+    for (var i = 0; i < a.length; i++) {
+      var av = a[i];
+      if (!av) continue;
+      for (var j = 0; j < b.length; j++) {
+        var bv = b[j];
+        if (bv) out[i + j] += av * bv;
+      }
+    }
+    return out;
+  }
+
+  function now() { return Date.now(); }
+
+  /* -------------------------------------------------- 由棋盘构建数字约束 */
+
+  function buildConstraints(rows, cols, cells) {
+    var nb = neighbors(rows, cols), n = rows * cols, cons = [];
+    for (var i = 0; i < n; i++) {
+      var s = cells[i];
+      if (s < 0 || s > 8) continue;
+      var rem = s, S = [], list = nb[i];
+      for (var t = 0; t < list.length; t++) {
+        var j = list[t], v = cells[j];
+        if (v === DIA) rem--;
+        else if (v === U) S.push(j);
+      }
+      if (rem < 0) {
+        return {
+          error: {
+            type: 'over', cell: i,
+            msg: cellName(i, cols) + ' 显示 ' + s + '，但周围已确认的钻石已超过这个数'
+          }
+        };
+      }
+      if (rem > S.length) {
+        return {
+          error: {
+            type: 'short', cell: i,
+            msg: cellName(i, cols) + ' 显示 ' + s + '，还需 ' + rem + ' 颗钻石，但周围只有 ' + S.length + ' 个未翻开格'
+          }
+        };
+      }
+      if (S.length === 0) continue;
+      cons.push({ cells: S, rem: rem });
+    }
+    return { cons: cons };
+  }
+
+  /* --------------------------------------------------------- 确定性推导 */
+
+  function propagate(rows, cols, cells) {
+    var work = Int8Array.from(cells);
+    var deduced = [];
+    var guard = 0;
+
+    while (guard++ < 60) {
+      var bc = buildConstraints(rows, cols, work);
+      if (bc.error) return { deduced: deduced, error: bc.error };
+      var base = bc.cons;
+      if (!base.length) break;
+
+      /* 子集规则闭包：A ⊂ B 派生 (B\A, remB-remA) */
+      var list = base.slice();
+      var round = 0, added = true;
+      while (added && round++ < 5) {
+        added = false;
+        var lim = list.length;
+        for (var a = 0; a < lim && list.length < 180; a++) {
+          for (var b = 0; b < lim; b++) {
+            if (a === b) continue;
+            var A = list[a].cells, B = list[b].cells;
+            if (A.length >= B.length) continue;
+            if (!isSubset(A, B)) continue;
+            var D = setDiff(B, A);
+            var rd = list[b].rem - list[a].rem;
+            if (rd < 0 || rd > D.length) {
+              return {
+                deduced: deduced,
+                error: { type: 'conflict', cell: b, msg: cellName(b, cols) + ' 附近的数字约束互相矛盾，请检查标记' }
+              };
+            }
+            if (D.length === 0) continue;
+            var dup = false;
+            for (var q = 0; q < list.length; q++) {
+              if (list[q].rem === rd && sameSet(list[q].cells, D)) { dup = true; break; }
+            }
+            if (dup) continue;
+            list.push({ cells: D, rem: rd });
+            added = true;
+          }
+        }
+        if (list.length >= 180) break;
+      }
+
+      var decided = Object.create(null);
+      var conflict = -1;
+      for (var m = 0; m < list.length; m++) {
+        var cn = list[m], want = -1;
+        if (cn.rem === 0) want = SAFE;
+        else if (cn.rem === cn.cells.length) want = DIA;
+        if (want < 0) continue;
+        for (var t = 0; t < cn.cells.length; t++) {
+          var c = cn.cells[t];
+          if (decided[c] !== undefined && decided[c] !== want) conflict = c;
+          decided[c] = want;
+        }
+      }
+      if (conflict >= 0) {
+        return {
+          deduced: deduced,
+          error: { type: 'conflict', cell: conflict, msg: cellName(conflict, cols) + ' 的推导结果自相矛盾，请检查标记' }
+        };
+      }
+
+      var keys = Object.keys(decided);
+      if (!keys.length) break;
+      for (var z = 0; z < keys.length; z++) {
+        var ci = +keys[z];
+        work[ci] = decided[ci];
+        deduced.push({ i: ci, v: decided[ci] });
+      }
+    }
+    return { deduced: deduced, error: null };
+  }
+
+  /* ------------------------------------------------------- 分量精确枚举 */
+
+  /* ------------------------------------- 超大分量降级：最大熵 / IPF 近似 */
+
+  /**
+   * 当精确枚举不可行时，用"满足全部线性约束的最大熵分布"作为近似。
+   * 每轮把每条约束覆盖的格子的概率按比例缩放到其剩余钻石数，
+   * 再整体缩放到全局剩余钻石数，迭代至收敛。这是平滑的、确定性的近似，
+   * 不含随机性，且能保证与所有数字约束在期望意义上吻合。
+   */
+  function entropyApprox(rows, cols, cons, unknownList, R) {
+    var n = rows * cols;
+    var probs = new Float64Array(n);
+    var m = unknownList.length;
+    if (m === 0) return probs;
+
+    var pos = new Map();
+    for (var i = 0; i < m; i++) pos.set(unknownList[i], i);
+
+    var EPS = 1e-6;
+    var q = new Float64Array(m);
+    var init = Math.max(EPS, Math.min(1 - EPS, R / m));
+    q.fill(init);
+
+    var idxs = [];
+    for (var j = 0; j < cons.length; j++) {
+      var arr = [];
+      for (var t = 0; t < cons[j].cells.length; t++) {
+        var pp = pos.get(cons[j].cells[t]);
+        if (pp !== undefined) arr.push(pp);
+      }
+      idxs.push(arr);
+    }
+
+    for (var it = 0; it < 300; it++) {
+      for (j = 0; j < cons.length; j++) {
+        var lst = idxs[j], s = 0, t2;
+        for (t2 = 0; t2 < lst.length; t2++) s += q[lst[t2]];
+        if (s <= 1e-9) continue;
+        var f = cons[j].rem / s;
+        for (t2 = 0; t2 < lst.length; t2++) {
+          var v = q[lst[t2]] * f;
+          q[lst[t2]] = v < EPS ? EPS : (v > 1 - EPS ? 1 - EPS : v);
+        }
+      }
+      var sg = 0;
+      for (i = 0; i < m; i++) sg += q[i];
+      if (sg > 1e-9) {
+        var fg = R / sg;
+        for (i = 0; i < m; i++) {
+          var v2 = q[i] * fg;
+          q[i] = v2 < EPS ? EPS : (v2 > 1 - EPS ? 1 - EPS : v2);
+        }
+      }
+    }
+
+    for (i = 0; i < m; i++) probs[unknownList[i]] = q[i];
+    return probs;
+  }
+
+  function enumerateComponent(cellList, conList, opts) {
+    var budget = opts.budget || 30000000;
+    var deadline = opts.deadline || Infinity;
+
+    var m = cellList.length, C = conList.length;
+    var localOf = new Map();
+    for (var i = 0; i < m; i++) localOf.set(cellList[i], i);
+
+    var cFlat = new Int32Array(C * MAXC);
+    var cLen = new Int32Array(C);
+    var cRem = new Int32Array(C);
+    var cCur = new Int32Array(C);
+    var cUn = new Int32Array(C);
+    var cellConsStart = new Int32Array(m + 1);
+    var cellConsList = [];
+
+    var tmp = new Array(m);
+    for (i = 0; i < m; i++) tmp[i] = [];
+
+    for (var j = 0; j < C; j++) {
+      var srcCells = conList[j].cells;
+      cLen[j] = srcCells.length;
+      cRem[j] = conList[j].rem;
+      cUn[j] = srcCells.length;
+      for (var t = 0; t < srcCells.length; t++) {
+        var li = localOf.get(srcCells[t]);
+        cFlat[j * MAXC + t] = li;
+        tmp[li].push(j);
+      }
+    }
+    for (i = 0; i < m; i++) {
+      cellConsStart[i] = cellConsList.length;
+      for (t = 0; t < tmp[i].length; t++) cellConsList.push(tmp[i][t]);
+    }
+    cellConsStart[m] = cellConsList.length;
+    var cellCons = Int32Array.from(cellConsList);
+
+    var val = new Int8Array(m).fill(-1);
+    var poolBuf = new Int32Array(C * MAXC);
+    var chosenBuf = new Uint8Array(C * MAXC);
+
+    var cnt = new Float64Array(m + 1);
+    var marg = new Array(m);
+    for (i = 0; i < m; i++) marg[i] = new Float64Array(m + 1);
+    var diaStack = [];
+
+    var nodes = 0, aborted = false, solutions = 0;
+
+    function setVal(c, v) {
+      val[c] = v;
+      if (v === 1) diaStack.push(c);
+      var ok = true;
+      var s = cellConsStart[c], e = cellConsStart[c + 1];
+      for (var q = s; q < e; q++) {
+        var jj = cellCons[q];
+        cUn[jj]--;
+        if (v === 1) cCur[jj]++;
+        if (cCur[jj] > cRem[jj] || cCur[jj] + cUn[jj] < cRem[jj]) ok = false;
+      }
+      return ok;
+    }
+
+    function unsetVal(c) {
+      var v = val[c];
+      if (v === 1) diaStack.pop();
+      var s = cellConsStart[c], e = cellConsStart[c + 1];
+      for (var q = s; q < e; q++) {
+        var jj = cellCons[q];
+        cUn[jj]++;
+        if (v === 1) cCur[jj]--;
+      }
+      val[c] = -1;
+    }
+
+    function record() {
+      var kk = diaStack.length;
+      cnt[kk] += 1;
+      for (var q = 0; q < kk; q++) marg[diaStack[q]][kk] += 1;
+    }
+
+    function pick() {
+      var bestJ = -1, bestComb = Infinity;
+      for (var jj = 0; jj < C; jj++) {
+        var unj = cUn[jj];
+        if (unj === 0) {
+          if (cCur[jj] !== cRem[jj]) return -2;
+          continue;
+        }
+        var need = cRem[jj] - cCur[jj];
+        if (need < 0 || need > unj) return -2;
+        var comb = comboEstimate(unj, need);
+        if (comb < bestComb) {
+          bestComb = comb; bestJ = jj;
+          if (comb === 1) break;
+        }
+      }
+      return bestJ;
+    }
+
+    function dfs(depth) {
+      if (aborted) return;
+      var jj = pick();
+      if (jj === -2) return;
+      if (jj === -1) { solutions++; record(); return; }
+
+      var need = cRem[jj] - cCur[jj];
+      var base = depth * MAXC;
+      var off = jj * MAXC, len = cLen[jj], k = 0;
+      for (var t = 0; t < len; t++) {
+        var c = cFlat[off + t];
+        if (val[c] === -1) poolBuf[base + k++] = c;
+      }
+      if (need < 0 || need > k) return;          /* 防御：不应发生 */
+      for (t = 0; t < k; t++) chosenBuf[base + t] = 0;
+      rec(depth, base, k, 0, need);
+    }
+
+    function rec(depth, base, k, start, left) {
+      if (aborted) return;
+      if (left === 0) {
+        if (++nodes > budget) { aborted = true; return; }
+        if ((nodes & 4095) === 0 && now() > deadline) { aborted = true; return; }
+        var ok = true;
+        for (var i2 = 0; i2 < k && ok; i2++) ok = setVal(poolBuf[base + i2], chosenBuf[base + i2] ? 1 : 0);
+        if (ok) dfs(depth + 1);
+        for (var r2 = k - 1; r2 >= 0; r2--) {
+          var c2 = poolBuf[base + r2];
+          if (val[c2] !== -1) unsetVal(c2);
+        }
+        return;
+      }
+      for (var i3 = start; i3 <= k - left; i3++) {
+        chosenBuf[base + i3] = 1;
+        rec(depth, base, k, i3 + 1, left - 1);
+        chosenBuf[base + i3] = 0;
+        if (aborted) return;
+      }
+    }
+
+    dfs(0);
+    return { cnt: cnt, marg: marg, aborted: aborted, nodes: nodes, solutions: solutions };
+  }
+
+  /* ------------------------------------------------------------ 分量拆分 */
+
+  function splitComponents(cons) {
+    var cellCons = new Map();
+    for (var ci = 0; ci < cons.length; ci++) {
+      var cs = cons[ci].cells;
+      for (var t = 0; t < cs.length; t++) {
+        var c = cs[t];
+        var arr = cellCons.get(c);
+        if (!arr) { arr = []; cellCons.set(c, arr); }
+        arr.push(ci);
+      }
+    }
+    var seenCell = new Set(), comps = [];
+    cellCons.forEach(function (_, start) {
+      if (seenCell.has(start)) return;
+      var stack = [start], cells = [], conIdx = [], conSeen = new Set();
+      seenCell.add(start);
+      while (stack.length) {
+        var c = stack.pop();
+        cells.push(c);
+        var lst = cellCons.get(c) || [];
+        for (var t = 0; t < lst.length; t++) {
+          var ci2 = lst[t];
+          if (conSeen.has(ci2)) continue;
+          conSeen.add(ci2);
+          conIdx.push(ci2);
+          var cs2 = cons[ci2].cells;
+          for (var u = 0; u < cs2.length; u++) {
+            var c2 = cs2[u];
+            if (!seenCell.has(c2)) { seenCell.add(c2); stack.push(c2); }
+          }
+        }
+      }
+      comps.push({ cells: cells, cons: conIdx.map(function (i3) { return cons[i3]; }) });
+    });
+    return comps;
+  }
+
+  /* ---------------------------------------------------------------- 求解 */
+
+  function analyze(rows, cols, cells, total, opts) {
+    opts = opts || {};
+    var useGlobal = opts.useGlobal !== false;
+    var budget = opts.budget || 30000000;
+    var timeMs = opts.timeMs === undefined ? 400 : opts.timeMs;
+    var sampleN = opts.sample || 24000;
+    var deadline = now() + timeMs;
+    var t0 = now();
+
+    var n = rows * cols, i;
+
+    /* --- 1. 内部确定性传播（不修改调用方棋盘） --- */
+    var pr = propagate(rows, cols, cells);
+    if (pr.error) {
+      return { ok: false, probs: new Float64Array(n), error: pr.error };
+    }
+    var work = cells;
+    if (pr.deduced.length) {
+      work = Int8Array.from(cells);
+      for (i = 0; i < pr.deduced.length; i++) work[pr.deduced[i].i] = pr.deduced[i].v;
+    }
+
+    var foundDia = 0, unknown = 0;
+    for (i = 0; i < n; i++) {
+      var s = work[i];
+      if (s === DIA) foundDia++;
+      else if (s === U) unknown++;
+    }
+
+    var probs = new Float64Array(n);
+    for (i = 0; i < pr.deduced.length; i++) {
+      probs[pr.deduced[i].i] = pr.deduced[i].v === DIA ? 1 : 0;
+    }
+
+    var R = total - foundDia;
+    if (R < 0) {
+      return {
+        ok: false, probs: probs,
+        error: { type: 'count', msg: '已确认的钻石数（' + foundDia + '）已超过地图钻石总数（' + total + '）' }
+      };
+    }
+    if (R > unknown) {
+      return {
+        ok: false, probs: probs,
+        error: { type: 'count', msg: '还剩 ' + R + ' 颗钻石未找到，但未翻开格只有 ' + unknown + ' 个' }
+      };
+    }
+
+    if (unknown === 0) {
+      return {
+        ok: true, probs: probs, approx: false, error: null,
+        stats: { foundDia: foundDia, unknown: 0, remaining: 0, frontier: 0, outside: 0, comps: 0, deduced: pr.deduced.length, elapsed: now() - t0 }
+      };
+    }
+
+    var bc = buildConstraints(rows, cols, work);
+    if (bc.error) return { ok: false, probs: probs, error: bc.error };
+    var cons = bc.cons;
+
+    var frontierSet = new Set();
+    for (i = 0; i < cons.length; i++) {
+      var cs = cons[i].cells;
+      for (var t = 0; t < cs.length; t++) frontierSet.add(cs[t]);
+    }
+    var nOut = unknown - frontierSet.size;
+
+    var comps = splitComponents(cons);
+    var results = [];
+    var anyAborted = false;
+    for (i = 0; i < comps.length; i++) {
+      var r0 = enumerateComponent(comps[i].cells, comps[i].cons, { budget: budget, deadline: deadline, sample: 0 });
+      results.push(r0);
+      if (r0.aborted) anyAborted = true;
+    }
+    if (now() > deadline) anyAborted = true;
+
+    var approx = false;
+    if (anyAborted) {
+      /* 精确枚举不可行（边界过大）：改用最大熵近似，明确标记为"近似" */
+      approx = true;
+      var unkList = [];
+      for (i = 0; i < n; i++) if (work[i] === U) unkList.push(i);
+      var approxAll = entropyApprox(rows, cols, cons, unkList, R);
+      for (i = 0; i < n; i++) {
+        if (work[i] === U) probs[i] = Math.max(0, Math.min(1, approxAll[i]));
+      }
+      return {
+        ok: true, probs: probs, approx: true, error: null,
+        stats: {
+          foundDia: foundDia, unknown: unknown, remaining: R,
+          frontier: frontierSet.size, outside: nOut, comps: comps.length,
+          deduced: pr.deduced.length, elapsed: now() - t0
+        }
+      };
+    }
+
+    var C = results.length;
+    var pre = new Array(C + 1), suf = new Array(C + 1);
+    pre[0] = new Float64Array([1]);
+    for (i = 0; i < C; i++) pre[i + 1] = conv(pre[i], results[i].cnt);
+    suf[C] = new Float64Array([1]);
+    for (i = C - 1; i >= 0; i--) suf[i] = conv(suf[i + 1], results[i].cnt);
+    var dist = pre[C] || new Float64Array([1]);
+    var others = new Array(C);
+    for (i = 0; i < C; i++) others[i] = conv(pre[i], suf[i + 1]);
+
+    var totalDist = sumArr(dist);
+    if (!(totalDist > 0)) {
+      return { ok: false, probs: probs, error: { type: 'nosol', msg: '当前标记下不存在任何合法布局（可能标错了格子）' } };
+    }
+
+    var w = new Float64Array(dist.length);
+    var totalW = 0, maxW = 0, K;
+    if (useGlobal) {
+      for (K = 0; K < dist.length; K++) {
+        if (!dist[K]) continue;
+        var ways = binom(nOut, R - K);
+        if (!ways) continue;
+        w[K] = dist[K] * ways;
+        if (w[K] > maxW) maxW = w[K];
+      }
+      if (!(maxW > 0)) {
+        return { ok: false, probs: probs, error: { type: 'nosol', msg: '按全局钻石总数无解：剩余 ' + R + ' 颗钻石无处安放（检查标记是否有误）' } };
+      }
+      for (K = 0; K < w.length; K++) { w[K] /= maxW; totalW += w[K]; }
+    } else {
+      for (K = 0; K < dist.length; K++) { w[K] = dist[K]; totalW += w[K]; }
+    }
+
+    /* 外围格概率 */
+    var pOut = 0;
+    if (nOut > 0) {
+      if (useGlobal) {
+        var acc0 = 0;
+        for (K = 0; K < dist.length; K++) {
+          if (!dist[K]) continue;
+          var ways2 = binom(nOut - 1, R - K - 1);
+          if (ways2) acc0 += dist[K] * ways2;
+        }
+        pOut = acc0 / maxW / totalW;
+      } else {
+        var eK = 0;
+        for (K = 0; K < dist.length; K++) eK += K * dist[K];
+        eK /= totalDist;
+        pOut = (R - eK) / nOut;
+      }
+      pOut = Math.max(0, Math.min(1, pOut));
+    }
+
+    /* 边界格概率 */
+    for (var ci = 0; ci < C; ci++) {
+      var comp = comps[ci], res = results[ci], ot = others[ci];
+      var mm = comp.cells.length;
+      var cache = new Float64Array(mm + 1).fill(NaN);
+      var cntTotal = 0;
+      if (!useGlobal) cntTotal = sumArr(res.cnt);
+
+      for (var li = 0; li < mm; li++) {
+        var mg = res.marg[li];
+        var acc2 = 0;
+        for (K = 0; K <= mm; K++) {
+          var mk = mg[K];
+          if (!mk) continue;
+          if (useGlobal) {
+            var inner = cache[K];
+            if (inner !== inner) {
+              inner = 0;
+              for (var x = 0; x < ot.length; x++) {
+                var ox = ot[x];
+                if (!ox) continue;
+                var ww = binom(nOut, R - K - x);
+                if (ww) inner += ox * ww;
+              }
+              cache[K] = inner;
+            }
+            acc2 += mk * inner;
+          } else {
+            acc2 += mk;
+          }
+        }
+        var p;
+        if (useGlobal) p = acc2 / maxW / totalW;
+        else p = cntTotal > 0 ? acc2 / cntTotal : 0;
+        probs[comp.cells[li]] = Math.max(0, Math.min(1, p));
+      }
+    }
+
+    if (nOut > 0) {
+      for (i = 0; i < n; i++) {
+        if (work[i] === U && !frontierSet.has(i)) probs[i] = pOut;
+      }
+    }
+
+    return {
+      ok: true,
+      probs: probs,
+      approx: approx,
+      error: null,
+      stats: {
+        foundDia: foundDia,
+        unknown: unknown,
+        remaining: R,
+        frontier: frontierSet.size,
+        outside: nOut,
+        comps: C,
+        deduced: pr.deduced.length,
+        elapsed: now() - t0
+      }
+    };
+  }
+
+  /* ------------------------------------------------------------ 下一步推荐 */
+
+  function recommend(rows, cols, cells, probs) {
+    var n = rows * cols, nb = neighbors(rows, cols);
+    var best = -1, bestScore = null;
+
+    for (var i = 0; i < n; i++) {
+      if (cells[i] !== U) continue;
+      var p = probs[i] || 0;
+      var nums = 0, lst = nb[i];
+      for (var t = 0; t < lst.length; t++) {
+        var v = cells[lst[t]];
+        if (v >= 0 && v <= 8) nums++;
+      }
+      var r = Math.floor(i / cols), c = i % cols;
+      var edge = (r === 0 || c === 0 || r === rows - 1 || c === cols - 1) ? 1 : 0;
+      var score = [p, nums, -edge, -i];
+      if (best < 0 || better(score, bestScore)) { best = i; bestScore = score; }
+    }
+    return best;
+
+    function better(a, b) {
+      for (var q = 0; q < a.length; q++) {
+        if (a[q] > b[q] + 1e-12) return true;
+        if (a[q] < b[q] - 1e-12) return false;
+      }
+      return false;
+    }
+  }
+
+  return {
+    U: U, DIA: DIA, SAFE: SAFE,
+    neighbors: neighbors,
+    binom: binom,
+    cellName: cellName,
+    buildConstraints: buildConstraints,
+    propagate: propagate,
+    analyze: analyze,
+    recommend: recommend
+  };
+})();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = TidalCore;
+
+</script>
+<script>
+/* =========================================================================
+ * 潮汐秘境计算器 · 界面逻辑
+ * 依赖：window.TidalCore（内联在同一个文件里）
+ * ========================================================================= */
+(function () {
+  'use strict';
+
+  var Core = window.TidalCore;
+  var U = Core.U, DIA = Core.DIA, SAFE = Core.SAFE;
+
+  var LS_STATE = 'tidal.state.v1';
+  var LS_CFG = 'tidal.config.override.v1';
+  var LS_SET = 'tidal.settings.v1';
+  var NO_STORAGE = !!window.__TIDAL_NO_STORAGE__;
+
+  /* ------------------------------------------------------------ 配置处理 */
+
+  function isPlain(o) { return !!o && typeof o === 'object' && !Array.isArray(o); }
+
+  function clone(o) {
+    if (Array.isArray(o)) return o.map(clone);
+    if (isPlain(o)) {
+      var r = {};
+      for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) r[k] = clone(o[k]);
+      return r;
+    }
+    return o;
+  }
+
+  function merge(base, over) {
+    if (!isPlain(over)) return clone(base);
+    var out = isPlain(base) ? clone(base) : {};
+    for (var k in over) {
+      if (!Object.prototype.hasOwnProperty.call(over, k)) continue;
+      if (isPlain(out[k]) && isPlain(over[k])) out[k] = merge(out[k], over[k]);
+      else out[k] = clone(over[k]);
+    }
+    return out;
+  }
+
+  var EMBEDDED = JSON.parse(document.getElementById('tidal-config').textContent);
+  var CONFIG = clone(EMBEDDED);
+
+  var SET = {
+    useGlobal: !!EMBEDDED.prob.useGlobal,
+    showCoords: !!EMBEDDED.fx.showCoords,
+    tint: EMBEDDED.fx.tint,
+    pulse: !!EMBEDDED.fx.pulse
+  };
+
+  function readStore(key) {
+    if (NO_STORAGE) return null;
+    try { var s = localStorage.getItem(key); return s ? JSON.parse(s) : null; } catch (e) { return null; }
+  }
+  function writeStore(key, val) {
+    if (NO_STORAGE) return;
+    try {
+      if (val === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(val));
+    } catch (e) { /* 隐私模式 / 配额不足：静默忽略 */ }
+  }
+
+  var cfgOverride = readStore(LS_CFG);
+  if (cfgOverride) CONFIG = merge(EMBEDDED, cfgOverride);
+
+  var savedSet = readStore(LS_SET);
+  if (savedSet) {
+    if (typeof savedSet.useGlobal === 'boolean') SET.useGlobal = savedSet.useGlobal;
+    if (typeof savedSet.showCoords === 'boolean') SET.showCoords = savedSet.showCoords;
+    if (typeof savedSet.pulse === 'boolean') SET.pulse = savedSet.pulse;
+    if (typeof savedSet.tint === 'number') SET.tint = savedSet.tint;
+  }
+
+  /* ---------------------------------------------------------------- 状态 */
+
+  var S = {
+    rows: 10, cols: 10, total: 30,
+    cells: null, auto: null,
+    history: [],
+    cursor: 0,
+    tool: 'menu',
+    res: null,
+    rec: -1,
+    stroking: false,
+    strokeSnap: false,
+    painting: false,
+    lastPaint: -1
+  };
+
+  var cellsEls = [];
+
+  /* -------------------------------------------------------------- 工具函数 */
+
+  function $(id) { return document.getElementById(id); }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function fmt(tpl, obj) {
+    return String(tpl == null ? '' : tpl).replace(/\{(\w+)\}/g, function (m, k) {
+      return obj && obj[k] !== undefined ? String(obj[k]) : m;
+    });
+  }
+
+  function text(key, fallback) {
+    var v = CONFIG.text && CONFIG.text[key];
+    return v === undefined || v === null ? (fallback || '') : v;
+  }
+
+  /* ------------------------------------------------------------ 配置应用 */
+
+  function applyConfig(cfg) {
+    CONFIG = cfg;
+    var c = CONFIG.color || {}, b = CONFIG.board || {}, f = CONFIG.fx || {};
+    var rs = document.documentElement.style;
+
+    rs.setProperty('--bg', c.bg || '#eef1f7');
+    rs.setProperty('--bg2', c.bg2 || '#e5eaf4');
+    rs.setProperty('--panel', c.panel || '#ffffff');
+    rs.setProperty('--ink', c.ink || '#171a22');
+    rs.setProperty('--muted', c.muted || '#6a7285');
+    rs.setProperty('--line', c.line || '#e4e8f0');
+    rs.setProperty('--accent', c.accent || '#3b6ef6');
+    rs.setProperty('--accent-ink', c.accentInk || '#ffffff');
+    rs.setProperty('--low', c.low || '#2f6df6');
+    rs.setProperty('--mid', c.mid || '#b0731a');
+    rs.setProperty('--high', c.high || '#e0382e');
+    for (var i = 1; i <= 8; i++) rs.setProperty('--num' + i, c['num' + i] || '#333');
+    rs.setProperty('--dia-bg', c.diaBg || '#fff3bf');
+    rs.setProperty('--dia-line', c.diaLine || '#f0a500');
+    rs.setProperty('--safe-bg', c.safeBg || '#eaeef4');
+    rs.setProperty('--safe-ink', c.safeInk || '#98a2b3');
+    rs.setProperty('--rec', c.rec || '#ff2d2d');
+
+    rs.setProperty('--gap', (b.gap == null ? 4 : b.gap) + 'px');
+    rs.setProperty('--radius', (b.radius == null ? 9 : b.radius) + 'px');
+    rs.setProperty('--tint', String(SET.tint == null ? 0.06 : SET.tint));
+    rs.setProperty('--pulse-ms', (f.pulseMs || 1500) + 'ms');
+    document.body.classList.toggle('nopulse', !SET.pulse);
+
+    document.title = text('title', '潮汐秘境计算器');
+
+    var nodes = document.querySelectorAll('[data-cfg]');
+    for (var n = 0; n < nodes.length; n++) {
+      var key = nodes[n].getAttribute('data-cfg');
+      var val = CONFIG.text && CONFIG.text[key];
+      if (val !== undefined && val !== null) nodes[n].textContent = val;
+    }
+
+    var bf = $('boardFrame');
+    if (bf) bf.classList.toggle('noCoords', !SET.showCoords);
+
+    buildMaps();
+    buildPalette();
+    fitCell();
+    if (S.cells) { render(); updateUI(); }
+  }
+
+  /* -------------------------------------------------------------- 棋盘构建 */
+
+  function totalFor(size) {
+    var idx = (CONFIG.board.sizes || []).indexOf(size);
+    if (idx >= 0 && CONFIG.board.diamonds && CONFIG.board.diamonds[idx] != null) {
+      return CONFIG.board.diamonds[idx];
+    }
+    return Math.round(size * size * 0.31);
+  }
+
+  function setSize(size, opts) {
+    opts = opts || {};
+    S.rows = size;
+    S.cols = size;
+    S.total = totalFor(size);
+    var n = size * size;
+    var sameShape = S.cells && S.cells.length === n;
+
+    if (!sameShape || !opts.keep) {
+      S.cells = new Int8Array(n).fill(U);
+      S.auto = new Uint8Array(n);
+      S.history = [];
+    }
+    S.cursor = Math.min(S.cursor || 0, n - 1);
+    S.res = null;
+    S.rec = -1;
+
+    buildBoard();
+    buildMaps();
+    fitCell();
+    scheduleRecompute();
+  }
+
+  function buildBoard() {
+    var n = S.rows * S.cols;
+    var board = $('board');
+    board.innerHTML = '';
+    cellsEls = new Array(n);
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < n; i++) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cell';
+      b.setAttribute('data-i', i);
+      b.setAttribute('role', 'gridcell');
+      b.tabIndex = -1;
+      frag.appendChild(b);
+      cellsEls[i] = b;
+    }
+    board.appendChild(frag);
+
+    var bf = $('boardFrame');
+    bf.style.setProperty('--cols', S.cols);
+    bf.style.setProperty('--rows', S.rows);
+    $('colHead').style.setProperty('--cols', S.cols);
+    $('rowHead').style.setProperty('--rows', S.rows);
+
+    buildRulers();
+  }
+
+  function buildRulers() {
+    var ch = $('colHead'), rh = $('rowHead');
+    ch.innerHTML = ''; rh.innerHTML = '';
+    for (var c = 0; c < S.cols; c++) {
+      var e = document.createElement('i');
+      e.textContent = c + 1;
+      ch.appendChild(e);
+    }
+    for (var r = 0; r < S.rows; r++) {
+      var e2 = document.createElement('i');
+      e2.textContent = r + 1;
+      rh.appendChild(e2);
+    }
+  }
+
+  function fitCell() {
+    /* 注意：.boardCard 是 width:fit-content，量它会形成循环依赖，
+       所以这里量页面容器 .app 的可用宽度 */
+    var host = document.querySelector('.app') || document.body;
+    var configured = (CONFIG.board && CONFIG.board.cellSize) || 38;
+    var gap = (CONFIG.board && CONFIG.board.gap) || 0;
+    var avail = host.clientWidth - 34;
+    if (!(avail > 0)) avail = configured * S.cols;
+    var need = S.cols * configured + (S.cols - 1) * gap + 30;
+    var cell = configured;
+    if (need > avail) {
+      cell = Math.floor((avail - (S.cols - 1) * gap - 30) / S.cols);
+      cell = Math.max(16, cell);
+    }
+    document.documentElement.style.setProperty('--cell', cell + 'px');
+  }
+
+  /* ------------------------------------------------------------ 地图/工具条 */
+
+  function buildMaps() {
+    var el = $('maps');
+    if (!el) return;
+    el.innerHTML = '';
+    var sizes = (CONFIG.board && CONFIG.board.sizes) || [8, 10, 12];
+    sizes.forEach(function (sz) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = sz + '×' + sz;
+      if (sz === S.rows) b.className = 'on';
+      b.setAttribute('aria-pressed', sz === S.rows ? 'true' : 'false');
+      b.addEventListener('click', function () {
+        if (sz === S.rows) return;
+        setSize(sz);
+        saveState();
+      });
+      el.appendChild(b);
+    });
+  }
+
+  function buildPalette() {
+    var el = $('palette');
+    if (!el) return;
+    el.innerHTML = '';
+
+    var lab = document.createElement('span');
+    lab.className = 'plabel';
+    lab.textContent = text('paletteLabel', '标记');
+    el.appendChild(lab);
+
+    addTool('menu', '✋', text('toolMenu', '菜单'), '');
+    for (var d = 0; d <= 8; d++) addTool(String(d), String(d), '记为 ' + d, '');
+    addTool('diamond', '💎', text('toolDiamond', '钻石'), 't-dia');
+    addTool('safe', '×', text('toolSafe', '安全'), 't-safe');
+    addTool('clear', '⌫', text('toolClear', '清除'), '');
+
+    function addTool(id, label, title, extra) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tool' + (extra ? ' ' + extra : '') + (S.tool === id ? ' on' : '');
+      b.textContent = label;
+      b.title = title;
+      b.setAttribute('aria-label', title);
+      b.setAttribute('data-tool', id);
+      b.addEventListener('click', function () { setTool(id); });
+      el.appendChild(b);
+    }
+  }
+
+  function setTool(id) {
+    S.tool = id;
+    var nodes = document.querySelectorAll('.tool');
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].classList.toggle('on', nodes[i].getAttribute('data-tool') === id);
+    }
+    saveState();
+  }
+
+  /* ---------------------------------------------------------------- 渲染 */
+
+  function render() {
+    if (!S.cells) return;
+    var res = S.res;
+    var ok = res && res.ok;
+    var lowMax = (CONFIG.prob && CONFIG.prob.lowMax) || 20;
+    var midMax = (CONFIG.prob && CONFIG.prob.midMax) || 50;
+    var rec = S.rec;
+
+    for (var i = 0; i < S.cells.length; i++) {
+      var el = cellsEls[i];
+      if (!el) continue;
+      var s = S.cells[i];
+      var cls = 'cell';
+      var txt = '';
+
+      if (s === U) {
+        cls += ' unknown';
+        var p = ok ? res.probs[i] : NaN;
+        if (isFinite(p)) {
+          var pct = Math.round(p * 100);
+          cls += pct < lowMax ? ' p-low' : (pct < midMax ? ' p-mid' : ' p-high');
+          txt = pct + '%';
+          if (pct === 100) cls += ' pct3';
+          el.style.setProperty('--w', String(0.35 + 1.25 * p));
+        } else {
+          el.style.setProperty('--w', '1');
+        }
+      } else if (s === DIA) {
+        cls += ' dia' + (S.auto[i] ? ' derived' : '');
+        txt = '💎';
+      } else if (s === SAFE) {
+        cls += ' safe' + (S.auto[i] ? ' derived' : '');
+        txt = '×';
+      } else {
+        cls += ' num n' + s;
+        txt = String(s);
+      }
+
+      if (i === rec) cls += ' rec';
+      if (i === S.cursor) cls += ' cursor';
+
+      if (el.className !== cls) el.className = cls;
+      if (el.textContent !== txt) el.textContent = txt;
+
+      var rr = Math.floor(i / S.cols) + 1, cc = (i % S.cols) + 1;
+      var tip = '第' + rr + '行 第' + cc + '列';
+      if (s === U && ok && isFinite(res.probs[i])) tip += ' · 钻石概率 ' + (res.probs[i] * 100).toFixed(1) + '%';
+      else if (s === U) tip += ' · 未翻开';
+      else if (s === DIA) tip += ' · 钻石';
+      else if (s === SAFE) tip += ' · 安全';
+      else tip += ' · 数字 ' + s;
+      if (i === rec) tip += ' ·（推荐）';
+      el.title = tip;
+    }
+  }
+
+  function updateUI() {
+    if (!S.cells) return;
+    var found = 0, unk = 0, safeCnt = 0;
+    for (var i = 0; i < S.cells.length; i++) {
+      var s = S.cells[i];
+      if (s === DIA) found++;
+      else if (s === U) unk++;
+      else safeCnt++;
+    }
+    $('cRemain').textContent = Math.max(0, S.total - found);
+    $('cFound').textContent = found;
+    $('cPending').textContent = unk;
+
+    var tally = $('tally');
+    if (tally) {
+      tally.innerHTML = '必定钻石 <b class="d">' + found + '</b> · 必定安全 <b>' + safeCnt +
+        '</b> · 待定 <b>' + unk + '</b>';
+    }
+
+    var res = S.res;
+    var card = $('recCard');
+    var recEl = $('recText');
+    var noteEl = $('recNote');
+    var badge = $('modeBadge');
+    card.className = 'recCard';
+
+    if (unk === 0) {
+      card.classList.add('done');
+      recEl.textContent = text('recDone', '全部钻石已找到');
+      noteEl.textContent = '';
+      badge.className = 'badge exact';
+      badge.textContent = '完成';
+    } else if (!res) {
+      recEl.textContent = '—';
+      noteEl.textContent = '';
+      badge.className = 'badge idle';
+      badge.textContent = text('badgeIdle', '待输入');
+    } else if (!res.ok) {
+      card.classList.add('warn');
+      recEl.textContent = res.error.msg;
+      noteEl.textContent = '修正标记后会自动重新计算';
+      badge.className = 'badge err';
+      badge.textContent = '无解';
+    } else {
+      var rec = S.rec;
+      var pct = rec >= 0 ? Math.round(res.probs[rec] * 100) : 0;
+      var rr = rec >= 0 ? Math.floor(rec / S.cols) + 1 : 0;
+      var cc = rec >= 0 ? (rec % S.cols) + 1 : 0;
+
+      recEl.innerHTML = rec >= 0
+        ? esc(fmt(text('recFmt', '建议点开 第 {row} 行 · 第 {col} 列'), { row: rr, col: cc })) +
+          '<span class="pct">' + pct + '%</span>'
+        : '—';
+
+      /* 底部一行说明：为什么是这一格 */
+      var note;
+      var anyNumber = false;
+      for (var q = 0; q < S.cells.length; q++) {
+        if (S.cells[q] >= 0 && S.cells[q] <= 8) { anyNumber = true; break; }
+      }
+      if (!anyNumber && found === 0) {
+        note = text('recStart', '先点开任意一格，把看到的结果填进来');
+      } else {
+        var tied = 0;
+        var best = res.probs[rec];
+        for (q = 0; q < S.cells.length; q++) {
+          if (S.cells[q] !== U) continue;
+          if (Math.abs(res.probs[q] - best) < 1e-9) tied++;
+        }
+        note = fmt(text('recProb', '钻石概率 {p}%'), { p: pct });
+        if (tied > 1 && best > 0) note += ' · ' + text('recTie', '并列最高，选了信息量更大的那一格');
+      }
+      noteEl.textContent = note;
+
+      badge.className = 'badge ' + (res.approx ? 'approx' : 'exact');
+      badge.textContent = res.approx ? text('badgeApprox', '近似') : text('badgeExact', '精确');
+    }
+
+    $('btnUndo').disabled = S.history.length === 0;
+
+    var sb = $('statBadge');
+    if (res && res.ok && res.stats) {
+      sb.className = 'badge ' + (res.approx ? 'approx' : 'idle');
+      sb.textContent = (res.approx ? '近似' : '精确') + ' · ' + res.stats.elapsed + 'ms · 边界 ' +
+        res.stats.frontier + ' · 分量 ' + res.stats.comps;
+    } else if (res && !res.ok) {
+      sb.className = 'badge err';
+      sb.textContent = '无解';
+    } else {
+      sb.className = 'badge idle';
+      sb.textContent = '—';
+    }
+  }
+
+  /* ------------------------------------------------------------ 求解调度 */
+
+  var lastCost = 0;
+  var pendingTimer = 0;
+
+  function scheduleRecompute() {
+    if (pendingTimer) return;
+    /* 局面简单时同步算，保证点击即时反馈；一旦变慢就改成异步，避免卡界面 */
+    if (lastCost <= 28) { recompute(); return; }
+    pendingTimer = setTimeout(function () {
+      pendingTimer = 0;
+      recompute();
+    }, 0);
+  }
+
+  function recompute() {
+    if (!S.cells) return;
+    var res = Core.analyze(S.rows, S.cols, S.cells, S.total, {
+      useGlobal: SET.useGlobal,
+      timeMs: (CONFIG.prob && CONFIG.prob.timeMs) || 400
+    });
+    S.res = res;
+    S.rec = res.ok ? Core.recommend(S.rows, S.cols, S.cells, res.probs) : -1;
+    lastCost = (res.stats && res.stats.elapsed) || 0;
+    render();
+    updateUI();
+    saveState();
+  }
+
+  /* ------------------------------------------------------------ 棋盘改动 */
+
+  function snapshot() {
+    S.history.push({ cells: Int8Array.from(S.cells), auto: Uint8Array.from(S.auto) });
+    if (S.history.length > 240) S.history.shift();
+  }
+
+  function mutate(i, v) {
+    if (S.cells[i] === v) return false;
+    if (!S.stroking) snapshot();
+    else if (!S.strokeSnap) { snapshot(); S.strokeSnap = true; }
+    S.cells[i] = v;
+    S.auto[i] = 0;
+    return true;
+  }
+
+  function applyTool(i, isDrag) {
+    var t = S.tool;
+    if (t === 'menu') return false;
+    var cur = S.cells[i];
+
+    if (t === 'diamond') return mutate(i, isDrag ? DIA : (cur === DIA ? U : DIA));
+    if (t === 'safe') return mutate(i, isDrag ? SAFE : (cur === SAFE ? U : SAFE));
+    if (t === 'clear') return mutate(i, U);
+    return mutate(i, parseInt(t, 10));
+  }
+
+  function undo() {
+    var snap = S.history.pop();
+    if (!snap) { toast('没有可撤销的操作了'); return; }
+    S.cells = snap.cells;
+    S.auto = snap.auto;
+    scheduleRecompute();
+  }
+
+  function clearBoard() {
+    var any = false;
+    for (var i = 0; i < S.cells.length; i++) if (S.cells[i] !== U) { any = true; break; }
+    if (!any) { toast('棋盘已经是空的了'); return; }
+    snapshot();
+    S.cells.fill(U);
+    S.auto.fill(0);
+    scheduleRecompute();
+    toast('已清空棋盘，可以撤销');
+  }
+
+  function deduce() {
+    var pr = Core.propagate(S.rows, S.cols, S.cells);
+    if (pr.error) { toast(pr.error.msg); return; }
+    if (!pr.deduced.length) { toast('当前局面没有能直接确定的格子'); return; }
+
+    snapshot();
+    var nD = 0, nS = 0;
+    for (var i = 0; i < pr.deduced.length; i++) {
+      var d = pr.deduced[i];
+      if (S.cells[d.i] === U) {
+        S.cells[d.i] = d.v;
+        S.auto[d.i] = 1;
+        if (d.v === DIA) nD++; else nS++;
+      }
+    }
+    scheduleRecompute();
+    toast('推导完成：新增 ' + nD + ' 颗钻石、' + nS + ' 个安全格');
+  }
+
+  /* ---------------------------------------------------------------- 提示 */
+
+  var toastTimer = 0;
+  function toast(msg) {
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('on'); }, 2400);
+  }
+
+  /* -------------------------------------------------------------- 存档 */
+
+  var saveTimer = 0;
+  function saveState() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      writeStore(LS_STATE, {
+        v: 1,
+        size: S.rows,
+        cells: S.cells ? Array.from(S.cells) : null,
+        auto: S.auto ? Array.from(S.auto) : null,
+        tool: S.tool
+      });
+    }, 220);
+  }
+
+  function restoreState() {
+    var st = readStore(LS_STATE);
+    var sizes = (CONFIG.board && CONFIG.board.sizes) || [8, 10, 12];
+    var def = (CONFIG.board && CONFIG.board.defaultSize) || sizes[1] || sizes[0];
+
+    if (st && st.cells && sizes.indexOf(st.size) >= 0) {
+      S.rows = st.size;
+      S.cols = st.size;
+      S.total = totalFor(st.size);
+      S.cells = Int8Array.from(st.cells);
+      S.auto = Uint8Array.from(st.auto || []);
+      if (S.auto.length !== S.cells.length) S.auto = new Uint8Array(S.cells.length);
+      if (st.tool) S.tool = st.tool;
+      buildBoard();
+      buildMaps();
+      fitCell();
+      scheduleRecompute();
+      return true;
+    }
+
+    setSize(def);
+    return false;
+  }
+
+  /* ---------------------------------------------------------- 格子交互 */
+
+  function bindBoard() {
+    var board = $('board');
+
+    board.addEventListener('pointerdown', function (e) {
+      var el = e.target.closest ? e.target.closest('.cell') : null;
+      if (!el) return;
+      var i = parseInt(el.getAttribute('data-i'), 10);
+
+      if (e.button === 2) return;  /* 右键交给 contextmenu */
+
+      S.cursor = i;
+      el.focus({ preventScroll: true });
+
+      if (e.button === 0) {
+        if (S.tool === 'menu') {
+          openCellMenu(i);
+          return;
+        }
+        S.stroking = true;
+        S.strokeSnap = false;
+        S.painting = true;
+        S.lastPaint = i;
+        if (applyTool(i, false)) scheduleRecompute();
+        render();
+        e.preventDefault();
+      }
+    });
+
+    board.addEventListener('pointermove', function (e) {
+      if (!S.painting || S.tool === 'menu') return;
+      var el = document.elementFromPoint(e.clientX, e.clientY);
+      if (!el || !el.closest) return;
+      var cell = el.closest('.cell');
+      if (!cell) return;
+      var i = parseInt(cell.getAttribute('data-i'), 10);
+      if (i === S.lastPaint) return;
+      S.lastPaint = i;
+      if (applyTool(i, true)) {
+        scheduleRecompute();
+        render();
+      }
+    });
+
+    function endStroke() {
+      if (!S.painting) return;
+      S.painting = false;
+      S.stroking = false;
+      S.strokeSnap = false;
+      S.lastPaint = -1;
+    }
+    window.addEventListener('pointerup', endStroke);
+    window.addEventListener('pointercancel', endStroke);
+
+    board.addEventListener('contextmenu', function (e) {
+      var el = e.target.closest ? e.target.closest('.cell') : null;
+      if (!el) return;
+      e.preventDefault();
+      var i = parseInt(el.getAttribute('data-i'), 10);
+      S.cursor = i;
+      mutate(i, S.cells[i] === DIA ? U : DIA);
+      scheduleRecompute();
+      render();
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (document.querySelector('.modalMask.on')) return;
+      if (e.ctrlKey || e.metaKey) {
+        if (e.key === 'z' || e.key === 'Z') { e.preventDefault(); undo(); }
+        if (e.key === 'r' || e.key === 'R') { e.preventDefault(); deduce(); }
+        return;
+      }
+      var tag = (e.target && e.target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      var k = e.key;
+      var moved = false;
+      var r = Math.floor(S.cursor / S.cols), c = S.cursor % S.cols;
+
+      if (k === 'ArrowUp') { r = Math.max(0, r - 1); moved = true; }
+      else if (k === 'ArrowDown') { r = Math.min(S.rows - 1, r + 1); moved = true; }
+      else if (k === 'ArrowLeft') { c = Math.max(0, c - 1); moved = true; }
+      else if (k === 'ArrowRight') { c = Math.min(S.cols - 1, c + 1); moved = true; }
+
+      if (moved) {
+        e.preventDefault();
+        S.cursor = r * S.cols + c;
+        render();
+        return;
+      }
+
+      if (k >= '0' && k <= '8') {
+        e.preventDefault();
+        mutate(S.cursor, parseInt(k, 10));
+        scheduleRecompute(); render();
+      } else if (k === 'Enter') {
+        e.preventDefault();
+        mutate(S.cursor, S.cells[S.cursor] === DIA ? U : DIA);
+        scheduleRecompute(); render();
+      } else if (k === 'x' || k === 'X') {
+        e.preventDefault();
+        mutate(S.cursor, S.cells[S.cursor] === SAFE ? U : SAFE);
+        scheduleRecompute(); render();
+      } else if (k === 'r' || k === 'R') {
+        e.preventDefault();
+        deduce();
+      } else if (k === 'Delete' || k === 'Backspace') {
+        e.preventDefault();
+        mutate(S.cursor, U);
+        scheduleRecompute(); render();
+      }
+    });
+  }
+
+  /* ------------------------------------------------------------ 格子菜单 */
+
+  var menuBuilt = false;
+
+  function buildCellMenu() {
+    var menu = $('cellMenu');
+    menu.innerHTML = '';
+    var items = [{ id: 'clear', label: '⌫', title: '清除' }];
+    for (var d = 0; d <= 8; d++) items.push({ id: String(d), label: String(d), title: '记为 ' + d });
+    items.push({ id: 'diamond', label: '💎', title: '钻石', cls: 't-dia' });
+    items.push({ id: 'safe', label: '×', title: '安全', cls: 't-safe' });
+
+    items.forEach(function (it) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tool' + (it.cls ? ' ' + it.cls : '');
+      b.textContent = it.label;
+      b.title = it.title;
+      b.addEventListener('click', function () {
+        var i = menu._cell;
+        closeCellMenu();
+        if (i == null) return;
+        if (it.id === 'diamond') mutate(i, DIA);
+        else if (it.id === 'safe') mutate(i, SAFE);
+        else if (it.id === 'clear') mutate(i, U);
+        else mutate(i, parseInt(it.id, 10));
+        scheduleRecompute(); render();
+      });
+      menu.appendChild(b);
+    });
+    menuBuilt = true;
+  }
+
+  function openCellMenu(i) {
+    if (!menuBuilt) buildCellMenu();
+    var menu = $('cellMenu');
+    var mask = $('cellMenuMask');
+    menu._cell = i;
+
+    mask.classList.add('on');
+    menu.style.visibility = 'hidden';
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+
+    var r = cellsEls[i].getBoundingClientRect();
+    var mw = menu.offsetWidth, mh = menu.offsetHeight;
+    var x = Math.min(window.innerWidth - mw - 8, Math.max(8, r.left + r.width / 2 - mw / 2));
+    var y = r.bottom + 6;
+    if (y + mh > window.innerHeight - 8) y = Math.max(8, r.top - mh - 6);
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.style.visibility = 'visible';
+  }
+
+  function closeCellMenu() {
+    $('cellMenuMask').classList.remove('on');
+    $('cellMenu')._cell = null;
+  }
+
+  /* ---------------------------------------------------------------- 弹窗 */
+
+  function openModal(id) { $(id).classList.add('on'); }
+  function closeModal(id) { $(id).classList.remove('on'); }
+
+  function bindModals() {
+    document.querySelectorAll('[data-close]').forEach(function (b) {
+      b.addEventListener('click', function () { closeModal(b.getAttribute('data-close')); });
+    });
+    document.querySelectorAll('.modalMask').forEach(function (m) {
+      m.addEventListener('mousedown', function (e) {
+        if (e.target === m) {
+          if (m.id === 'cellMenuMask') closeCellMenu();
+          else m.classList.remove('on');
+        }
+      });
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      var open = document.querySelector('.modalMask.on');
+      if (!open) return;
+      if (open.id === 'cellMenuMask') closeCellMenu();
+      else open.classList.remove('on');
+    });
+  }
+
+  /* ------------------------------------------------------------ 设置面板 */
+
+  function mkSwitch(on, onChange) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'switch' + (on ? ' on' : '');
+    b.setAttribute('role', 'switch');
+    b.setAttribute('aria-checked', on ? 'true' : 'false');
+    b.addEventListener('click', function () {
+      var v = !b.classList.contains('on');
+      b.classList.toggle('on', v);
+      b.setAttribute('aria-checked', v ? 'true' : 'false');
+      onChange(v);
+    });
+    return b;
+  }
+
+  function mkRow(label, desc, ctl) {
+    var d = document.createElement('div');
+    d.className = 'row';
+    var l = document.createElement('div');
+    var a = document.createElement('div');
+    a.className = 'rlabel';
+    a.textContent = label;
+    l.appendChild(a);
+    if (desc) {
+      var b = document.createElement('div');
+      b.className = 'rdesc';
+      b.textContent = desc;
+      l.appendChild(b);
+    }
+    var c = document.createElement('div');
+    c.className = 'rctl';
+    if (ctl) c.appendChild(ctl);
+    d.appendChild(l);
+    d.appendChild(c);
+    return d;
+  }
+
+  function persistSettings() { writeStore(LS_SET, SET); }
+
+  function renderSettings() {
+    var body = $('settingsBody');
+    body.innerHTML = '';
+
+    body.appendChild(mkRow('全局钻石总数约束',
+      '按固定的钻石总数加权，概率更严格（关闭后只做局部约束，数值会略有不同）',
+      mkSwitch(SET.useGlobal, function (v) {
+        SET.useGlobal = v;
+        persistSettings();
+        scheduleRecompute();
+      })));
+
+    body.appendChild(mkRow('显示行列坐标',
+      '在棋盘外侧显示 1…N 的行列刻度',
+      mkSwitch(SET.showCoords, function (v) {
+        SET.showCoords = v;
+        $('boardFrame').classList.toggle('noCoords', !v);
+        persistSettings();
+        fitCell();
+      })));
+
+    body.appendChild(mkRow('呼吸动画',
+      '推荐格使用红色描边 + 呼吸闪烁',
+      mkSwitch(SET.pulse, function (v) {
+        SET.pulse = v;
+        document.body.classList.toggle('nopulse', !v);
+        persistSettings();
+      })));
+
+    var rng = document.createElement('input');
+    rng.type = 'range';
+    rng.min = '0'; rng.max = '20'; rng.step = '1';
+    rng.value = String(Math.round((SET.tint || 0) * 100));
+    var out = document.createElement('b');
+    out.textContent = rng.value + '%';
+    out.style.cssText = 'font-size:11.5px;font-variant-numeric:tabular-nums;min-width:32px;text-align:right';
+    rng.addEventListener('input', function () {
+      SET.tint = parseInt(rng.value, 10) / 100;
+      out.textContent = rng.value + '%';
+      document.documentElement.style.setProperty('--tint', String(SET.tint));
+    });
+    rng.addEventListener('change', persistSettings);
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;align-items:center;gap:8px';
+    wrap.appendChild(rng); wrap.appendChild(out);
+    body.appendChild(mkRow('概率底色浓度', '未翻开格子按概率高低铺一层淡色', wrap));
+
+    var btnExport = document.createElement('button');
+    btnExport.type = 'button';
+    btnExport.className = 'btn';
+    btnExport.textContent = '导出存档';
+    btnExport.addEventListener('click', exportSave);
+
+    var btnImport = document.createElement('button');
+    btnImport.type = 'button';
+    btnImport.className = 'btn';
+    btnImport.textContent = '导入存档';
+    btnImport.addEventListener('click', importSave);
+
+    var wrap2 = document.createElement('div');
+    wrap2.style.cssText = 'display:flex;gap:8px';
+    wrap2.appendChild(btnExport); wrap2.appendChild(btnImport);
+    body.appendChild(mkRow('进度存档', '把当前棋盘保存成文件，换设备也能接着算', wrap2));
+
+    if (cfgOverride) {
+      var btnReset = document.createElement('button');
+      btnReset.type = 'button';
+      btnReset.className = 'btn';
+      btnReset.textContent = '移除外观覆盖';
+      btnReset.addEventListener('click', function () {
+        writeStore(LS_CFG, null);
+        cfgOverride = null;
+        applyConfig(clone(EMBEDDED));
+        renderSettings();
+        toast('已恢复为文件内嵌的外观配置');
+      });
+      body.appendChild(mkRow('外观覆盖', '当前外观由「潮汐秘境定制器」写入，已在生效', btnReset));
+    }
+  }
+
+  function exportSave() {
+    var data = {
+      v: 1, size: S.rows, cells: Array.from(S.cells), auto: Array.from(S.auto)
+    };
+    var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '潮汐秘境-存档-' + S.rows + 'x' + S.rows + '.json';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }
+
+  function importSave() {
+    var inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'application/json,.json';
+    inp.addEventListener('change', function () {
+      var f = inp.files && inp.files[0];
+      if (!f) return;
+      var fr = new FileReader();
+      fr.onload = function () {
+        try {
+          var d = JSON.parse(String(fr.result));
+          var sizes = CONFIG.board.sizes || [8, 10, 12];
+          if (!d || sizes.indexOf(d.size) < 0 || !Array.isArray(d.cells)) throw new Error('格式不对');
+          S.rows = d.size; S.cols = d.size; S.total = totalFor(d.size);
+          S.cells = Int8Array.from(d.cells);
+          S.auto = Uint8Array.from(d.auto || []);
+          if (S.auto.length !== S.cells.length) S.auto = new Uint8Array(S.cells.length);
+          S.history = [];
+          buildBoard(); buildMaps(); fitCell();
+          scheduleRecompute();
+          closeModal('settingsMask');
+          toast('存档已载入');
+        } catch (err) {
+          toast('这个文件读不出来：' + err.message);
+        }
+      };
+      fr.readAsText(f);
+    });
+    inp.click();
+  }
+
+  /* ------------------------------------------------------------ 截图识图 */
+
+  var shot = {
+    img: null,
+    rect: { x: 12, y: 12, w: 76, h: 76 },
+    cells: null,
+    loaded: false
+  };
+
+  function bindShot() {
+    var fileInput = $('shotFile');
+    var stage = $('shotStage');
+
+    $('btnShot').addEventListener('click', function () {
+      openModal('shotMask');
+      if (!shot.loaded) resetShotUI();
+    });
+
+    fileInput.addEventListener('change', function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (f) loadShotFile(f);
+    });
+
+    stage.addEventListener('dragover', function (e) {
+      e.preventDefault();
+      stage.style.outline = '3px dashed var(--accent)';
+      stage.style.outlineOffset = '-8px';
+    });
+    stage.addEventListener('dragleave', function () {
+      stage.style.outline = '';
+      stage.style.outlineOffset = '';
+    });
+    stage.addEventListener('drop', function (e) {
+      e.preventDefault();
+      stage.style.outline = '';
+      stage.style.outlineOffset = '';
+      var dt = e.dataTransfer;
+      if (!dt || !dt.files || !dt.files.length) return;
+      var f = dt.files[0];
+      if (f.type.indexOf('image/') === 0) loadShotFile(f);
+    });
+
+    document.addEventListener('paste', function (e) {
+      if (!$('shotMask').classList.contains('on')) return;
+      var items = e.clipboardData && e.clipboardData.items;
+      if (!items) return;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image/') === 0) {
+          var f = items[i].getAsFile();
+          if (f) { loadShotFile(f); e.preventDefault(); }
+          break;
+        }
+      }
+    });
+
+    ['gx', 'gy', 'gw', 'gh'].forEach(function (id) {
+      $(id).addEventListener('input', function () {
+        shot.rect.x = +$('gx').value;
+        shot.rect.y = +$('gy').value;
+        shot.rect.w = +$('gw').value;
+        shot.rect.h = +$('gh').value;
+        $('gxv').textContent = shot.rect.x;
+        $('gyv').textContent = shot.rect.y;
+        $('gwv').textContent = shot.rect.w;
+        $('ghv').textContent = shot.rect.h;
+        positionOverlay();
+      });
+    });
+
+    $('shotAuto').addEventListener('click', function () {
+      if (!shot.img) return;
+      var g = autoDetectGrid(shot.img);
+      if (!g) { toast('没能自动识别网格，请手动拖动滑块对齐'); return; }
+      shot.rect = g;
+      syncShotSliders();
+      positionOverlay();
+      toast('已自动对齐，如果不准可以用滑块微调');
+    });
+
+    $('shotApply').addEventListener('click', function () {
+      if (!shot.cells) return;
+      var changed = 0;
+      var snapshotted = false;
+      for (var i = 0; i < shot.cells.length; i++) {
+        var v = shot.cells[i];
+        if (v === U) continue;
+        if (S.cells[i] === v) continue;
+        if (!snapshotted) { snapshot(); snapshotted = true; }
+        S.cells[i] = v;
+        S.auto[i] = 0;
+        changed++;
+      }
+      closeModal('shotMask');
+      if (!changed) { toast('没有新的内容需要应用'); return; }
+      scheduleRecompute();
+      toast('已应用 ' + changed + ' 格');
+    });
+
+    $('shotReset').addEventListener('click', function () {
+      if (!shot.cells) return;
+      shot.cells.fill(U);
+      renderOverlay();
+      toast('已清空本次录入');
+    });
+
+    $('shotOverlay').addEventListener('pointerdown', function (e) {
+      var el = e.target.closest ? e.target.closest('.sc') : null;
+      if (!el || !shot.cells) return;
+      e.preventDefault();
+      var i = parseInt(el.getAttribute('data-i'), 10);
+      var t = S.tool;
+      var cur = shot.cells[i];
+      if (t === 'menu') { shot.cells[i] = cur === DIA ? U : DIA; }
+      else if (t === 'diamond') shot.cells[i] = cur === DIA ? U : DIA;
+      else if (t === 'safe') shot.cells[i] = cur === SAFE ? U : SAFE;
+      else if (t === 'clear') shot.cells[i] = U;
+      else shot.cells[i] = parseInt(t, 10);
+      renderOverlay();
+    });
+  }
+
+  function resetShotUI() {
+    $('shotDrop').classList.remove('hidden');
+    $('shotWrap').classList.add('hidden');
+    $('shotOverlay').classList.add('hidden');
+    ['shotAuto', 'shotApply', 'shotReset'].forEach(function (id) { $(id).disabled = true; });
+    ['gx', 'gy', 'gw', 'gh'].forEach(function (id) { $(id).disabled = true; });
+  }
+
+  function loadShotFile(file) {
+    var url = URL.createObjectURL(file);
+    var img = $('shotImg');
+    img.onload = function () {
+      shot.loaded = true;
+      shot.img = img;
+      shot.cells = new Int8Array(S.rows * S.cols).fill(U);
+      $('shotDrop').classList.add('hidden');
+      $('shotWrap').classList.remove('hidden');
+      $('shotOverlay').classList.remove('hidden');
+      ['shotAuto', 'shotApply', 'shotReset'].forEach(function (id) { $(id).disabled = false; });
+      ['gx', 'gy', 'gw', 'gh'].forEach(function (id) { $(id).disabled = false; });
+      buildOverlay();
+      positionOverlay();
+
+      var g = autoDetectGrid(img);
+      if (g) { shot.rect = g; syncShotSliders(); positionOverlay(); }
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    };
+    img.onerror = function () { toast('这张图片打不开'); };
+    img.src = url;
+  }
+
+  function syncShotSliders() {
+    $('gx').value = Math.round(shot.rect.x); $('gxv').textContent = Math.round(shot.rect.x);
+    $('gy').value = Math.round(shot.rect.y); $('gyv').textContent = Math.round(shot.rect.y);
+    $('gw').value = Math.round(shot.rect.w); $('gwv').textContent = Math.round(shot.rect.w);
+    $('gh').value = Math.round(shot.rect.h); $('ghv').textContent = Math.round(shot.rect.h);
+  }
+
+  function buildOverlay() {
+    var ov = $('shotOverlay');
+    ov.innerHTML = '';
+    ov.style.setProperty('--cols', S.cols);
+    ov.style.setProperty('--rows', S.rows);
+    for (var i = 0; i < S.rows * S.cols; i++) {
+      var d = document.createElement('div');
+      d.className = 'sc';
+      d.setAttribute('data-i', i);
+      ov.appendChild(d);
+    }
+    renderOverlay();
+  }
+
+  function renderOverlay() {
+    var ov = $('shotOverlay');
+    if (!shot.cells) return;
+    for (var i = 0; i < ov.children.length; i++) {
+      var d = ov.children[i];
+      var v = shot.cells[i];
+      var cls = 'sc';
+      var txt = '';
+      if (v === DIA) { cls += ' dia'; txt = '💎'; }
+      else if (v === SAFE) { cls += ' safe'; txt = '×'; }
+      else if (v >= 0 && v <= 8) { cls += ' num'; txt = String(v); }
+      if (d.className !== cls) d.className = cls;
+      if (d.textContent !== txt) d.textContent = txt;
+    }
+  }
+
+  function positionOverlay() {
+    var ov = $('shotOverlay');
+    ov.style.left = shot.rect.x + '%';
+    ov.style.top = shot.rect.y + '%';
+    ov.style.width = shot.rect.w + '%';
+    ov.style.height = shot.rect.h + '%';
+  }
+
+  /** 用投影能量粗略找出棋盘网格的外接矩形（百分比） */
+  function autoDetectGrid(img) {
+    try {
+      var W = 340;
+      var H = Math.max(1, Math.round(img.naturalHeight * W / img.naturalWidth));
+      var cv = document.createElement('canvas');
+      cv.width = W; cv.height = H;
+      var ctx = cv.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, W, H);
+      var data = ctx.getImageData(0, 0, W, H).data;
+
+      var gray = new Float32Array(W * H);
+      for (var i = 0; i < W * H; i++) {
+        gray[i] = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
+      }
+
+      var colE = new Float32Array(W - 1), rowE = new Float32Array(H - 1);
+      for (var x = 0; x < W - 1; x++) {
+        var s = 0;
+        for (var y = 0; y < H; y++) s += Math.abs(gray[y * W + x + 1] - gray[y * W + x]);
+        colE[x] = s;
+      }
+      for (var y2 = 0; y2 < H - 1; y2++) {
+        var s2 = 0;
+        for (var x2 = 0; x2 < W; x2++) s2 += Math.abs(gray[(y2 + 1) * W + x2] - gray[y2 * W + x2]);
+        rowE[y2] = s2;
+      }
+
+      function bounds(E, len) {
+        var mx = 0, k;
+        for (k = 0; k < len; k++) if (E[k] > mx) mx = E[k];
+        if (mx <= 0.001) return null;
+        var th = mx * 0.30;
+        var a = -1, b = -1;
+        for (k = 0; k < len; k++) if (E[k] >= th) { a = k; break; }
+        for (k = len - 1; k >= 0; k--) if (E[k] >= th) { b = k; break; }
+        if (a < 0 || b <= a || (b - a) < len * 0.2) return null;
+        return [a / len * 100, (b + 1) / len * 100];
+      }
+
+      var bx = bounds(colE, W - 1);
+      var by = bounds(rowE, H - 1);
+      if (!bx || !by) return null;
+
+      var x0 = Math.max(0, Math.min(95, bx[0]));
+      var y0 = Math.max(0, Math.min(95, by[0]));
+
+      /* 用当前地图尺寸把边界吸附成正方形比例，避免横纵被截断 */
+      var wPct = Math.min(100 - x0, bx[1] - bx[0]);
+      var hPct = Math.min(100 - y0, by[1] - by[0]);
+
+      return {
+        x: Math.round(x0),
+        y: Math.round(y0),
+        w: Math.max(5, Math.round(wPct)),
+        h: Math.max(5, Math.round(hPct))
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /* ---------------------------------------------------------- 定制器通信 */
+
+  function bindMessaging() {
+    window.addEventListener('message', function (e) {
+      var d = e.data;
+      if (!d || typeof d !== 'object') return;
+      if (d.__tidal === 'config' && d.config) {
+        applyConfig(merge(EMBEDDED, d.config));
+        toast('已应用外观改动');
+      }
+      if (d.__tidal === 'ping') {
+        try { e.source.postMessage({ __tidal: 'pong', meta: EMBEDDED.meta || {} }, '*'); } catch (err) {}
+      }
+    });
+  }
+
+  /* ---------------------------------------------------------------- 启动 */
+
+  function init() {
+    applyConfig(CONFIG);
+    bindModals();
+    bindBoard();
+    bindShot();
+    bindMessaging();
+
+    $('btnHelp').addEventListener('click', function () { openModal('helpMask'); });
+    $('btnSettings').addEventListener('click', function () {
+      renderSettings();
+      openModal('settingsMask');
+    });
+    $('btnUndo').addEventListener('click', undo);
+    $('btnDeduce').addEventListener('click', deduce);
+    $('btnClear').addEventListener('click', clearBoard);
+    $('cellMenuMask').addEventListener('mousedown', function (e) {
+      if (e.target === $('cellMenuMask')) closeCellMenu();
+    });
+
+    window.addEventListener('resize', fitCell);
+
+    restoreState();
+
+    if (cfgOverride) {
+      setTimeout(function () { toast('外观来自「潮汐秘境定制器」，可在设置里移除'); }, 700);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+
+</script>
+
+</body>
+</html>
